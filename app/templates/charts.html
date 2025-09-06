@@ -1,0 +1,82 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>Charts & Analytics</h2>
+  <div class="btn-group">
+    <button
+      type="button"
+      class="btn btn-outline-primary dropdown-toggle"
+      data-bs-toggle="dropdown"
+    >
+      Timeframe: Last 30 Days
+    </button>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item timeframe-btn" data-timeframe="7d"
+          >Last 7 Days</a
+        >
+      </li>
+      <li>
+        <a class="dropdown-item timeframe-btn" data-timeframe="30d"
+          >Last 30 Days</a
+        >
+      </li>
+      <li>
+        <a class="dropdown-item timeframe-btn" data-timeframe="90d"
+          >Last 90 Days</a
+        >
+      </li>
+      <li>
+        <a class="dropdown-item timeframe-btn" data-timeframe="1y">Last Year</a>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title">Income vs Expense</h5>
+      </div>
+      <div class="card-body">
+        <canvas id="incomeExpenseChart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title">Expenses by Category</h5>
+      </div>
+      <div class="card-body">
+        <canvas id="expenseCategoryChart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title">Income by Category</h5>
+      </div>
+      <div class="card-body">
+        <canvas id="incomeCategoryChart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title">Account Balances</h5>
+      </div>
+      <div class="card-body">
+        <canvas id="accountBalanceChart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

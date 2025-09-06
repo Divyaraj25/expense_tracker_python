@@ -1,0 +1,231 @@
+{% extends "base.html" %} {% block styles %}
+<link
+  href="{{ url_for('static', filename='css/dashboard.css') }}"
+  rel="stylesheet"
+/>
+{% endblock %} {% block content %}
+<div class="row">
+  <!-- Summary Cards -->
+  <div class="col-xl-3 col-md-6 mb-4">
+    <div class="card border-left-primary shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+            >
+              Total Balance
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              ${{ "%.2f"|format(total_balance) }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-4">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-success text-uppercase mb-1"
+            >
+              Total Income
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              ${{ "%.2f"|format(income_expense.total_income) }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-arrow-up fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-4">
+    <div class="card border-left-danger shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div
+              class="text-xs font-weight-bold text-danger text-uppercase mb-1"
+            >
+              Total Expense
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              ${{ "%.2f"|format(income_expense.total_expense) }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-arrow-down fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-4">
+    <div class="card border-left-info shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+              Net Flow
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">
+              ${{ "%.2f"|format(income_expense.net_flow) }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <i class="fas fa-exchange-alt fa-2x text-gray-300"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xl-8 col-lg-7">
+    <div class="card shadow mb-4">
+      <div
+        class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+      >
+        <h6 class="m-0 font-weight-bold text-primary">Recent Transactions</h6>
+        <a
+          href="{{ url_for('main.transactions_page') }}"
+          class="btn btn-sm btn-primary"
+          >View All</a
+        >
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for transaction in transactions %}
+              <tr>
+                <td>{{ transaction.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ transaction.description }}</td>
+                <td>
+                  <span class="badge bg-secondary"
+                    >{{ transaction.category }}</span
+                  >
+                </td>
+                <td
+                  class="{{ 'text-success' if transaction.type == 'income' else 'text-danger' }}"
+                >
+                  {{ '$%.2f'|format(transaction.amount) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="text-center">No transactions yet</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-lg-5">
+    <div class="card shadow mb-4">
+      <div
+        class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+      >
+        <h6 class="m-0 font-weight-bold text-primary">Accounts Summary</h6>
+        <a
+          href="{{ url_for('main.accounts_page') }}"
+          class="btn btn-sm btn-primary"
+          >Manage</a
+        >
+      </div>
+      <div class="card-body">
+        {% if accounts %}
+        <div class="list-group">
+          {% for account in accounts %}
+          <div
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <div>
+              <h6 class="mb-1">{{ account.name }}</h6>
+              <small class="text-muted"
+                >{{ account.type|title }}{% if account.bank_name %} • {{
+                account.bank_name }}{% endif %}</small
+              >
+            </div>
+            <span class="badge bg-primary rounded-pill"
+              >${{ "%.2f"|format(account.balance) }}</span
+            >
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No accounts yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <a
+              href="{{ url_for('main.transactions_page') }}"
+              class="btn btn-primary w-100"
+            >
+              <i class="fas fa-plus me-1"></i> Add Transaction
+            </a>
+          </div>
+          <div class="col-md-6 mb-3">
+            <a
+              href="{{ url_for('main.accounts_page') }}"
+              class="btn btn-outline-primary w-100"
+            >
+              <i class="fas fa-piggy-bank me-1"></i> Add Account
+            </a>
+          </div>
+          <div class="col-md-6 mb-3">
+            <a
+              href="{{ url_for('main.budgets_page') }}"
+              class="btn btn-outline-primary w-100"
+            >
+              <i class="fas fa-chart-pie me-1"></i> Set Budget
+            </a>
+          </div>
+          <div class="col-md-6 mb-3">
+            <a
+              href="{{ url_for('main.charts_page') }}"
+              class="btn btn-outline-primary w-100"
+            >
+              <i class="fas fa-chart-line me-1"></i> View Charts
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

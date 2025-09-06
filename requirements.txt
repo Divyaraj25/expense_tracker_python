@@ -1,0 +1,10 @@
+Flask
+PyMongo
+redis
+Flask-JWT-Extended
+Flask-Login
+Werkzeug<3.0.0
+python-dotenv
+python-dateutil
+bcrypt
+gunicorn

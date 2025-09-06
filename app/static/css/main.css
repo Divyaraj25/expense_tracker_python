@@ -1,0 +1,85 @@
+:root {
+  --primary: #4e73df;
+  --secondary: #858796;
+  --success: #1cc88a;
+  --info: #36b9cc;
+  --warning: #f6c23e;
+  --danger: #e74a3b;
+  --light: #f8f9fc;
+  --dark: #5a5c69;
+}
+
+body {
+  background-color: #f8f9fc;
+  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+.card {
+  border: none;
+  border-radius: 0.35rem;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.card-header {
+  background-color: #f8f9fc;
+  border-bottom: 1px solid #e3e6f0;
+}
+
+.navbar-brand {
+  font-weight: 800;
+}
+
+.border-left-primary {
+  border-left: 0.25rem solid var(--primary) !important;
+}
+
+.border-left-success {
+  border-left: 0.25rem solid var(--success) !important;
+}
+
+.border-left-info {
+  border-left: 0.25rem solid var(--info) !important;
+}
+
+.border-left-warning {
+  border-left: 0.25rem solid var(--warning) !important;
+}
+
+.border-left-danger {
+  border-left: 0.25rem solid var(--danger) !important;
+}
+
+.text-xs {
+  font-size: 0.7rem;
+}
+
+.text-gray-800 {
+  color: #5a5c69 !important;
+}
+
+.text-gray-300 {
+  color: #dddfeb !important;
+}
+
+.shadow {
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+}
+
+.table th {
+  border-top: none;
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.btn {
+  border-radius: 0.35rem;
+}
+
+.list-group-item {
+  border: 1px solid #e3e6f0;
+}
+
+.badge {
+  font-weight: 500;
+}

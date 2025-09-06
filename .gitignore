@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.Python
+
+# Virtual Environment
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Local development
+instance/
+
+# Testing
+.coverage
+
+# MongoDB
+data/
+
+# Redis
+*.rdb
+
+# System files
+.DS_Store
+Thumbs.db
