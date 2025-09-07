@@ -1,6 +1,9 @@
-from datetime import datetime
+from datetime import datetime, time
+import pytz
 from app import mongo
 from bson import ObjectId
+
+TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 class Transaction:
     DEFAULT_CATEGORIES = {
@@ -10,7 +13,18 @@ class Transaction:
     }
     
     @staticmethod
-    def create_transaction(user_id, type, amount, category, description, account_from=None, account_to=None, date=None):
+    def create_transaction(user_id, type, amount, category, description, account_from=None, account_to=None, date=None, time_str=None):
+        # Create datetime object from date and time
+        if date and time_str:
+            try:
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+                transaction_date = datetime.combine(date, time_obj)
+                transaction_date = TIMEZONE.localize(transaction_date)
+            except ValueError:
+                transaction_date = datetime.now(TIMEZONE)
+        else:
+            transaction_date = datetime.now(TIMEZONE)
+
         transaction = {
             'user_id': ObjectId(user_id),
             'type': type,
@@ -19,8 +33,9 @@ class Transaction:
             'description': description,
             'account_from': ObjectId(account_from) if account_from else None,
             'account_to': ObjectId(account_to) if account_to else None,
-            'date': date or datetime.now(),
-            'created_at': datetime.now()
+            'date': transaction_date,
+            'created_at': datetime.now(TIMEZONE),
+            'updated_at': datetime.now(TIMEZONE)
         }
         return mongo.db.transactions.insert_one(transaction)
     

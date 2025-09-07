@@ -1,7 +1,6 @@
 from datetime import datetime
 import bcrypt
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
 from app import mongo, login_manager
 from bson import ObjectId
 
@@ -47,7 +46,10 @@ class User(UserMixin):
 
     @staticmethod
     def create(username, email, password):
-        hashed_password = generate_password_hash(password)
+        # Generate salt and hash password using bcrypt
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+        
         user = {
             'username': username,
             'email': email,
@@ -72,10 +74,21 @@ class User(UserMixin):
 
     @staticmethod
     def verify_password(stored_password, provided_password):
-        return check_password_hash(stored_password, provided_password)
+        # Ensure stored_password is bytes (as stored in MongoDB)
+        if isinstance(stored_password, str):
+            stored_password = stored_password.encode('utf-8')
+        
+        # Check password using bcrypt
+        return bcrypt.checkpw(provided_password.encode('utf-8'), stored_password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        # Check password using bcrypt
+        if isinstance(self.password_hash, str):
+            stored_password = self.password_hash.encode('utf-8')
+        else:
+            stored_password = self.password_hash
+            
+        return bcrypt.checkpw(password.encode('utf-8'), stored_password)
 
     @staticmethod
     def update_user(user_id, update_data):
