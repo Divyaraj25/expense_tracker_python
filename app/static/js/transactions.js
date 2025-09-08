@@ -55,11 +55,17 @@ function toggleAccountFields() {
 }
 
 function loadTransactions() {
+  if (!localStorage.getItem('isAuthenticated')) {
+    console.error('User not authenticated');
+    return;
+  }
+
   fetch("/api/transactions/", {
     method: "GET",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     },
+    credentials: 'include'  // Important for session cookies
   })
     .then((response) => response.json())
     .then((data) => {
@@ -82,11 +88,15 @@ function loadTransactions() {
           dateCell.innerHTML = `
             <div class="d-flex flex-column">
               <span>${transaction.date_full} at ${transaction.time} IST</span>
-              ${weekDisplay ? `<small class="text-muted">${weekDisplay}</small>` : ''}
+              ${
+                weekDisplay
+                  ? `<small class="text-muted">${weekDisplay}</small>`
+                  : ""
+              }
             </div>
           `;
         } else {
-          dateCell.textContent = 'N/A';
+          dateCell.textContent = "N/A";
         }
 
         const typeCell = document.createElement("td");
@@ -137,6 +147,11 @@ function loadTransactions() {
 }
 
 function loadCategories() {
+  if (!localStorage.getItem('isAuthenticated')) {
+    console.error('User not authenticated');
+    return;
+  }
+
   fetch("/api/transactions/categories", {
     method: "GET",
     headers: {
@@ -181,10 +196,15 @@ function loadCategories() {
 }
 
 function loadAccounts() {
-  fetch("/api/accounts/", {
+  if (!localStorage.getItem('isAuthenticated')) {
+    console.error('User not authenticated');
+    return;
+  }
+
+  fetch("/api/accounts", {
     method: "GET",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     },
   })
     .then((response) => response.json())
@@ -214,12 +234,13 @@ function loadAccounts() {
 }
 
 function saveTransaction() {
+  // Get form elements
   const type = document.getElementById("transactionType").value;
   const amount = document.getElementById("transactionAmount").value;
   const category = document.getElementById("transactionCategory").value;
   const description = document.getElementById("transactionDescription").value;
-  const accountFrom = document.getElementById("transactionAccountFrom").value;
-  const accountTo = document.getElementById("transactionAccountTo").value;
+  const accountFrom = document.getElementById("transactionAccountFrom")?.value || '';
+  const accountTo = document.getElementById("transactionAccountTo")?.value || '';
   const date = document.getElementById("transactionDate").value;
   const time = document.getElementById("transactionTime").value;
 
@@ -245,49 +266,146 @@ function saveTransaction() {
     : "/api/transactions/";
   const method = window.currentEditId ? "PUT" : "POST";
 
+  // Validate required fields
+  const requiredFields = {
+    type: "Transaction type",
+    amount: "Amount",
+    category: "Category",
+    date: "Date",
+    time: "Time",
+  };
+
+  // Debug: Log all form values
+  console.log("Form values:", {
+    type,
+    amount,
+    category,
+    description,
+    accountFrom,
+    accountTo,
+    date,
+    time,
+  });
+
+  // Check for missing required fields
+  const missingFields = [];
+
+  if (!type || type.trim() === "") {
+    missingFields.push(requiredFields.type);
+  }
+  if (!amount || amount.trim() === "") {
+    missingFields.push(requiredFields.amount);
+  }
+  if (!category || category.trim() === "") {
+    missingFields.push(requiredFields.category);
+  }
+  if (!date || date.trim() === "") {
+    missingFields.push(requiredFields.date);
+  }
+  if (!time || time.trim() === "") {
+    missingFields.push(requiredFields.time);
+  }
+
+  // Additional validation based on transaction type
+  if ((type === "expense" || type === "transfer") && !accountFrom) {
+    missingFields.push("Source Account");
+  }
+  if ((type === "income" || type === "transfer") && !accountTo) {
+    missingFields.push("Destination Account");
+  }
+
+  if (missingFields.length > 0) {
+    throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+  }
+
+  // Prepare request data
+  const requestData = {
+    type,
+    amount: parseFloat(amount),
+    category,
+    description: description || "",
+    date: date,
+    time: time,
+  };
+
+  // Add account fields based on transaction type
+  if (type === "expense" || type === "transfer") {
+    requestData.account_from = accountFrom;
+  }
+  if (type === "income" || type === "transfer") {
+    requestData.account_to = accountTo;
+  }
+
   fetch(url, {
     method: method,
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify(transactionData),
+    credentials: 'include',  // Important for session cookies
+    body: JSON.stringify(requestData),
   })
-    .then((response) => response.json())
-    .then((data) => {
-      if (
-        data.message.includes("created") ||
-        data.message.includes("updated")
-      ) {
-        // Close modal and reset form
-        const modal = bootstrap.Modal.getInstance(
-          document.getElementById("addTransactionModal")
-        );
-        modal.hide();
-        resetForm();
-
-        // Reload transactions
-        loadTransactions();
-
-        // Show success message
-        showAlert(
-          `Transaction ${
-            window.currentEditId ? "updated" : "added"
-          } successfully!`,
-          "success"
-        );
-      } else {
-        throw new Error(data.message || "An error occurred");
+    .then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error('Server response error:', response.status, data);
+        throw new Error(data.message || `Server responded with status ${response.status}`);
       }
+      return data;
+    })
+    .then((data) => {
+      // Close the modal
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById("addTransactionModal")
+      );
+      if (modal) {
+        modal.hide();
+      }
+
+      // Reset the form
+      const form = document.getElementById("addTransactionForm");
+      if (form) {
+        form.reset();
+      }
+
+      // Reload transactions and refresh budgets
+      loadTransactions();
+      refreshBudgets();
+
+      // Show success message
+      showAlert(
+        `Transaction ${
+          window.currentEditId ? "updated" : "added"
+        } successfully!`,
+        "success"
+      );
+
+      // Reset edit ID
+      window.currentEditId = null;
     })
     .catch((error) => {
       console.error(
         `Error ${window.currentEditId ? "updating" : "adding"} transaction:`,
         error
       );
+
+      let errorMessage = error.message || "An unknown error occurred";
+
+      // Handle common error cases
+      if (error.message.includes("400")) {
+        errorMessage = "Invalid data. Please check your input and try again.";
+      } else if (error.message.includes("401") || error.message.includes("403")) {
+        errorMessage = "You need to be logged in to perform this action.";
+      } else if (error.message.includes("404")) {
+        errorMessage = "The requested resource was not found.";
+      } else if (error.message.includes("500") || error.message.includes("Server Error")) {
+        errorMessage = "A server error occurred. Please try again later.";
+        errorMessage = "Server error. Please try again later.";
+      }
+
       showAlert(
-        `Error ${window.currentEditId ? "updating" : "adding"} transaction: ${
-          error.message
-        }`,
+        `Error ${
+          window.currentEditId ? "updating" : "adding"
+        } transaction: ${errorMessage}`,
         "danger"
       );
     });
@@ -295,42 +413,90 @@ function saveTransaction() {
 
 function editTransaction(id) {
   fetch(`/api/transactions/${id}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json"
     },
+    credentials: 'include'  // Important for session cookies
   })
-    .then((response) => response.json())
-    .then((transaction) => {
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Failed to fetch transaction details");
+      }
+      return response.json();
+    })
+    .then((data) => {
+      const transaction = data.data || data;
+
       // Set the modal title
-      document.getElementById('transactionModalLabel').textContent = 'Edit Transaction';
+      const modalTitle = document.querySelector(
+        "#addTransactionModal .modal-title"
+      );
+      if (modalTitle) {
+        modalTitle.textContent = "Edit Transaction";
+      }
 
       // Set form values
-      document.getElementById('transactionType').value = transaction.type;
-      document.getElementById('transactionAmount').value = transaction.amount;
-      document.getElementById('transactionCategory').value = transaction.category;
-      document.getElementById('transactionDescription').value = transaction.description;
+      const transactionId = document.getElementById("transactionId");
+      const transactionType = document.getElementById("transactionType");
+      const transactionAmount = document.getElementById("transactionAmount");
+      const transactionCategory = document.getElementById(
+        "transactionCategory"
+      );
+      const transactionDescription = document.getElementById(
+        "transactionDescription"
+      );
+
+      if (transactionId) transactionId.value = id;
+      if (transactionType) transactionType.value = transaction.type || "";
+      if (transactionAmount) transactionAmount.value = transaction.amount || "";
+      if (transactionCategory) {
+        transactionCategory.value =
+          transaction.category_id || transaction.category || "";
+      }
+      if (transactionDescription) {
+        transactionDescription.value = transaction.description || "";
+      }
 
       // Set date and time using the pre-formatted strings from the backend
-      if (transaction.date_str) {
-        document.getElementById("transactionDate").value = transaction.date_str;
+      const transactionDate = document.getElementById("transactionDate");
+      const transactionTime = document.getElementById("transactionTime");
+
+      if (transactionDate) {
+        if (transaction.date_str) {
+          transactionDate.value = transaction.date_str;
+        } else if (transaction.date) {
+          // If we have a date object instead of string
+          const date = new Date(transaction.date);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          transactionDate.value = `${year}-${month}-${day}`;
+        }
       }
-      if (transaction.time_str) {
-        document.getElementById("transactionTime").value = transaction.time_str;
-      } else {
-        // Fallback to current time if no time is provided
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        document.getElementById("transactionTime").value = `${hours}:${minutes}`;
+
+      if (transactionTime) {
+        if (transaction.time_str) {
+          transactionTime.value = transaction.time_str;
+        } else if (transaction.time) {
+          transactionTime.value = transaction.time;
+        } else {
+          // Fallback to current time if no time is provided
+          const now = new Date();
+          const hours = String(now.getHours()).padStart(2, "0");
+          const minutes = String(now.getMinutes()).padStart(2, "0");
+          transactionTime.value = `${hours}:${minutes}`;
+        }
       }
 
       // Set accounts
       if (transaction.account_from) {
-        document.getElementById("transactionAccountFrom").value = transaction.account_from;
+        document.getElementById("transactionAccountFrom").value =
+          transaction.account_from;
       }
       if (transaction.account_to) {
-        document.getElementById("transactionAccountTo").value = transaction.account_to;
+        document.getElementById("transactionAccountTo").value =
+          transaction.account_to;
       }
 
       // Show the accounts section based on transaction type
@@ -340,12 +506,14 @@ function editTransaction(id) {
       window.currentEditId = id;
 
       // Show the modal
-      const modal = new bootstrap.Modal(document.getElementById('addTransactionModal'));
+      const modal = new bootstrap.Modal(
+        document.getElementById("addTransactionModal")
+      );
       modal.show();
     })
     .catch((error) => {
-      console.error('Error fetching transaction:', error);
-      showAlert('Error loading transaction details', 'danger');
+      console.error("Error fetching transaction:", error);
+      showAlert("Error loading transaction details", "danger");
     });
 }
 
@@ -355,13 +523,15 @@ function deleteTransaction(id) {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
     })
       .then((response) => response.json())
       .then((data) => {
-        if (data.message === "Transaction deleted") {
-          // Reload transactions
+        if (data.message && data.message.includes("deleted")) {
+          // Reload transactions and budgets
           loadTransactions();
+          refreshBudgets();
           showAlert("Transaction deleted successfully!", "success");
         } else {
           throw new Error(data.message || "Failed to delete transaction");
@@ -394,6 +564,16 @@ function resetForm() {
 
   // Reset to default time and date
   setDefaultTime();
+}
+
+// Refresh budget data
+function refreshBudgets() {
+  if (typeof loadBudgets === 'function') {
+    loadBudgets();
+  } else if (window.location.pathname.includes('budgets')) {
+    // If we're on the budgets page, trigger a page reload
+    window.location.reload();
+  }
 }
 
 // Show alert message

@@ -1,14 +1,14 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.transaction import Transaction
 from app.models.account import Account
+from app.models.budget import Budget
 from app.utils.validators import validate_date, validate_amount
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, Optional, List, Union, Tuple
 import pytz
 from bson import ObjectId
-from typing import Dict, Any, Optional
 
-# Constants
 TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 def _update_account_balances(transaction_data: Dict[str, Any], reverse: bool = False) -> None:
@@ -18,87 +18,195 @@ def _update_account_balances(transaction_data: Dict[str, Any], reverse: bool = F
         transaction_data: The transaction data
         reverse: If True, reverses the effect on account balances
     """
-    amount = transaction_data['amount']
-    if reverse:
-        amount = -amount
+    if not transaction_data or 'type' not in transaction_data:
+        return
         
-    if transaction_data['type'] == 'expense' and transaction_data.get('account_from'):
-        Account.update_account_balance(str(transaction_data['account_from']), -amount)
-    elif transaction_data['type'] == 'income' and transaction_data.get('account_to'):
-        Account.update_account_balance(str(transaction_data['account_to']), amount)
-    elif (transaction_data['type'] == 'transfer' and 
-          transaction_data.get('account_from') and 
-          transaction_data.get('account_to')):
-        Account.update_account_balance(str(transaction_data['account_from']), -amount)
-        Account.update_account_balance(str(transaction_data['account_to']), amount)
+    amount = float(transaction_data.get('amount', 0))
+    if amount <= 0:
+        return
+        
+    # For reversing a transaction, we just flip the sign of the amount
+    amount = -amount if reverse else amount
+    
+    # Handle different transaction types
+    try:
+        if transaction_data['type'] == 'expense' and 'account_from' in transaction_data:
+            Account.update_balance(transaction_data['account_from'], -amount)  # Decrease source account
+        elif transaction_data['type'] == 'income' and 'account_to' in transaction_data:
+            Account.update_balance(transaction_data['account_to'], amount)  # Increase destination account
+        elif transaction_data['type'] == 'transfer' and all(k in transaction_data for k in ['account_from', 'account_to']):
+            Account.update_balance(transaction_data['account_from'], -amount)  # Decrease source
+            Account.update_balance(transaction_data['account_to'], amount)  # Increase destination
+    except Exception as e:
+        current_app.logger.error(f"Error updating account balances: {str(e)}")
+        # Don't raise the exception to avoid failing the transaction operation
+        pass
 
-transactions_bp = Blueprint('transactions', __name__)
-
-def _format_transaction_dates(transaction):
+def _format_transaction_dates(transaction: Dict[str, Any]) -> Dict[str, Any]:
     """Helper function to format transaction dates for response"""
-    formatted = {
-        'id': str(transaction['_id']),
-        'type': transaction['type'],
-        'amount': transaction['amount'],
-        'category': transaction['category'],
-        'description': transaction['description'],
-        'account_from': str(transaction.get('account_from')) if transaction.get('account_from') else None,
-        'account_to': str(transaction.get('account_to')) if transaction.get('account_to') else None,
-    }
-    
-    # Format date fields with timezone
-    if transaction.get('date'):
-        dt = None
-        # Ensure we have a timezone-aware datetime object in IST
-        if isinstance(transaction['date'], str):
-            try:
-                # Parse the ISO format string and ensure it's timezone aware
-                dt = datetime.fromisoformat(transaction['date'].replace('Z', '+00:00'))
-                if dt.tzinfo is None:
-                    # If no timezone info, assume it's in UTC and convert to IST
-                    dt = pytz.utc.localize(dt).astimezone(TIMEZONE)
-                else:
-                    # Convert to IST if it's in a different timezone
-                    dt = dt.astimezone(TIMEZONE)
-            except (ValueError, AttributeError) as e:
-                print(f"Error parsing date: {e}")
-                dt = datetime.now(TIMEZONE)
-        elif isinstance(transaction['date'], datetime):
-            dt = transaction['date']
-            if dt.tzinfo is None:
-                # If no timezone info, assume it's in UTC and convert to IST
-                dt = pytz.utc.localize(dt).astimezone(TIMEZONE)
-            else:
-                # Convert to IST if it's in a different timezone
-                dt = dt.astimezone(TIMEZONE)
+    if not transaction:
+        return transaction
         
-        if dt:
-            # Format all dates in IST
-            formatted.update({
-                'date': dt.isoformat(),  # ISO format for frontend
-                'date_str': dt.strftime('%Y-%m-%d'),
-                'time_str': dt.strftime('%H:%M'),
-                'date_full': dt.strftime('%A, %B %d, %Y'),
-                'time': dt.strftime('%I:%M %p'),
-                'week_number': dt.strftime('%U'),
-                'timezone': 'IST',
-            })
+    # Create a copy to avoid modifying the original
+    formatted = dict(transaction)
     
-    if transaction.get('created_at'):
-        if isinstance(transaction['created_at'], str):
+    # Format date and time
+    if 'date' in formatted and formatted['date']:
+        if isinstance(formatted['date'], str):
             try:
-                dt = datetime.fromisoformat(transaction['created_at'].replace('Z', '+00:00'))
-                if not dt.tzinfo:
-                    dt = TIMEZONE.localize(dt)
-                transaction['created_at'] = dt
+                # If it's already a string in ISO format, parse it first
+                formatted['date'] = datetime.fromisoformat(formatted['date'].replace('Z', '+00:00'))
             except (ValueError, AttributeError):
+                # If parsing fails, leave it as is
                 pass
         
-        if isinstance(transaction['created_at'], datetime):
-            tz_aware_created = transaction['created_at'].astimezone(TIMEZONE)
-            formatted['created_at'] = tz_aware_created.strftime('%Y-%m-%d %I:%M %p')
+        if isinstance(formatted['date'], datetime):
+            # Convert to IST
+            ist = pytz.timezone('Asia/Kolkata')
+            if formatted['date'].tzinfo is None:
+                # If naive datetime, assume it's in UTC
+                formatted['date'] = pytz.utc.localize(formatted['date'])
+            # Convert to IST
+            formatted['date'] = formatted['date'].astimezone(ist)
+            
+            # Format date and time for the frontend
+            formatted['date_str'] = formatted['date'].strftime('%Y-%m-%d')
+            formatted['time_str'] = formatted['date'].strftime('%H:%M')
+            
+            # Add the full date and time in a human-readable format
+            formatted['date_full'] = formatted['date'].strftime('%b %d, %Y')
+            formatted['time'] = formatted['date'].strftime('%I:%M %p')
+            
+            # Also include a formatted datetime string
+            formatted['formatted_date'] = f"{formatted['date_full']} at {formatted['time']}"
+    
+    # Convert ObjectId to string for JSON serialization
+    if '_id' in formatted:
+        formatted['id'] = str(formatted.pop('_id'))
+    if 'user_id' in formatted:
+        formatted['user_id'] = str(formatted['user_id'])
+    if 'account_from' in formatted and formatted['account_from'] and isinstance(formatted['account_from'], ObjectId):
+        formatted['account_from'] = str(formatted['account_from'])
+    if 'account_to' in formatted and formatted['account_to'] and isinstance(formatted['account_to'], ObjectId):
+        formatted['account_to'] = str(formatted['account_to'])
     
     return formatted
+
+def _update_budget_for_transaction(
+    transaction: Dict[str, Any], 
+    old_transaction: Optional[Dict[str, Any]] = None,
+    is_deleted: bool = False
+) -> None:
+    """
+    Update the relevant budget when a transaction is created, updated, or deleted.
+    
+    Args:
+        transaction: The transaction data
+        old_transaction: The old transaction data (for updates)
+        is_deleted: Whether this is a delete operation
+    """
+    try:
+        from app import mongo
+        
+        # Get the transaction date (use current time if not provided)
+        transaction_date = transaction.get('date')
+        if not transaction_date:
+            transaction_date = datetime.now(pytz.timezone('Asia/Kolkata'))
+        elif isinstance(transaction_date, str):
+            # Parse string date if needed
+            try:
+                transaction_date = datetime.fromisoformat(transaction_date.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                transaction_date = datetime.now(pytz.timezone('Asia/Kolkata'))
+        
+        # Only process expense transactions for budget updates
+        if transaction.get('type') != 'expense':
+            return
+            
+        category = transaction.get('category')
+        if not category:
+            return
+            
+        user_id = transaction.get('user_id')
+        if not user_id:
+            return
+            
+        # For updates, if the category or date changed, we need to update both old and new budgets
+        if old_transaction and old_transaction.get('type') == 'expense':
+            old_category = old_transaction.get('category')
+            old_date = old_transaction.get('date')
+            
+            if old_category != category or old_date != transaction_date:
+                # Remove from old budget
+                old_budget = mongo.db.budgets.find_one({
+                    'user_id': ObjectId(user_id),
+                    'category': old_category,
+                    'start_date': {'$lte': old_date},
+                    '$or': [
+                        {'end_date': None},
+                        {'end_date': {'$gte': old_date}}
+                    ]
+                })
+                
+                if old_budget:
+                    Budget.update_budget_with_transaction(
+                        str(old_budget['_id']),
+                        {
+                            '_id': transaction.get('_id') or transaction.get('id'),
+                            'amount': old_transaction.get('amount', 0),
+                            'category': old_category,
+                            'date': old_date,
+                            'description': old_transaction.get('description', ''),
+                            '_deleted': True
+                        },
+                        is_new=False
+                    )
+        
+        # Find the relevant budget for this transaction
+        # First try to find a budget for the specific category and date
+        budget = mongo.db.budgets.find_one({
+            'user_id': ObjectId(user_id),
+            'category': category,
+            'start_date': {'$lte': transaction_date},
+            '$or': [
+                {'end_date': None},
+                {'end_date': {'$gte': transaction_date}}
+            ]
+        })
+        
+        if not budget:
+            # If no budget found for this category, try to find a general budget (no category)
+            budget = mongo.db.budgets.find_one({
+                'user_id': ObjectId(user_id),
+                'category': None,
+                'start_date': {'$lte': transaction_date},
+                '$or': [
+                    {'end_date': None},
+                    {'end_date': {'$gte': transaction_date}}
+                ]
+            })
+        
+        if budget:
+            # Update the budget with this transaction
+            Budget.update_budget_with_transaction(
+                str(budget['_id']),
+                {
+                    '_id': transaction.get('_id') or transaction.get('id'),
+                    'amount': transaction.get('amount', 0),
+                    'category': category,
+                    'date': transaction_date,
+                    'description': transaction.get('description', ''),
+                    '_deleted': is_deleted
+                },
+                is_new=not old_transaction and not is_deleted
+            )
+            
+    except Exception as e:
+        current_app.logger.error(f"Error updating budget for transaction: {str(e)}")
+        # Don't raise the exception to avoid failing the transaction operation
+        pass
+
+transactions_bp = Blueprint('transactions', __name__)
 
 @transactions_bp.route('/', methods=['GET', 'POST'])
 @jwt_required()
@@ -179,44 +287,62 @@ def handle_transactions():
                 date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
                 time_obj = datetime.strptime(time_str, '%H:%M').time()
                 transaction_date = datetime.combine(date_obj, time_obj)
-                # Make the datetime timezone aware
+                # Make the datetime timezone aware (IST)
                 transaction_date = TIMEZONE.localize(transaction_date)
+                # Convert to UTC for storage
+                transaction_date = transaction_date.astimezone(pytz.UTC)
             except ValueError as e:
                 return jsonify({'message': f'Invalid date or time format. Use YYYY-MM-DD and HH:MM. Error: {str(e)}'}), 400
 
         try:
-            time_str = datetime.now(TIMEZONE).strftime('%H:%M')
+            # Prepare transaction data
+            transaction_data = {
+                'user_id': current_user,
+                'type': transaction_type,
+                'amount': amount,
+                'category': category,
+                'description': description,
+                'date': transaction_date or datetime.now(pytz.UTC)
+            }
+            
+            # Add account references based on transaction type
+            if transaction_type == 'expense':
+                transaction_data['account_from'] = account_from
+            elif transaction_type == 'income':
+                transaction_data['account_to'] = account_to
+            else:  # transfer
+                transaction_data['account_from'] = account_from
+                transaction_data['account_to'] = account_to
             
             # Create the transaction
-            result = Transaction.create_transaction(
-                user_id=current_user,
-                type=transaction_type,
-                amount=amount,
-                category=category,
-                description=description,
-                account_from=account_from,
-                account_to=account_to,
-                date=transaction_date,
-                time_str=time_str
-            )
+            result = Transaction.create_transaction(**transaction_data)
+
+            # Get the created transaction
+            transaction = Transaction.get_transaction_by_id(result.inserted_id)
             
-            # Get the created transaction data
-            transaction_data = {
+            # Update account balances
+            _update_account_balances({
                 'type': transaction_type,
                 'amount': amount,
                 'account_from': account_from,
-                'account_to': account_to
-            }
+                'account_to': account_to,
+                'date': transaction_date or datetime.now(TIMEZONE)
+            })
             
-            # Update account balances
-            _update_account_balances(transaction_data)
-            
-            return jsonify({
-                'message': 'Transaction created', 
-                'id': str(result.inserted_id)
-            }), 201
+            # Update budget for this transaction
+            _update_budget_for_transaction({
+                '_id': result.inserted_id,
+                'user_id': current_user,
+                'type': transaction_type,
+                'amount': amount,
+                'category': category,
+                'description': description,
+                'date': transaction_date or datetime.now(TIMEZONE)
+            })
+
+            return jsonify(_format_transaction_dates(transaction)), 201
         except Exception as e:
-            return jsonify({'message': str(e)}), 500
+            return jsonify({'message': str(e)}), 400
 
 @transactions_bp.route('/<transaction_id>', methods=['GET', 'PUT', 'DELETE'])
 @jwt_required()
@@ -313,18 +439,60 @@ def handle_transaction(transaction_id):
             # Apply the new transaction effect
             _update_account_balances(updated_transaction)
             
+            # Update budget if this is an expense
+            if updated_transaction['type'] == 'expense':
+                budget = Budget.get_budget_by_category(current_user, updated_transaction['category'], date=updated_transaction['date'])
+                if budget:
+                    Budget.update_budget_with_transaction(
+                        str(budget['_id']),
+                        {
+                            'amount': updated_transaction['amount'],
+                            'category': updated_transaction['category'],
+                            'date': updated_transaction['date'],
+                            'description': updated_transaction['description'],
+                            '_id': str(updated_transaction['_id'])
+                        }
+                    )
+            
             return jsonify({
                 'message': 'Transaction updated',
                 'transaction': _format_transaction_dates(updated_transaction)
             }), 200
         
         elif request.method == 'DELETE':
-            # Reverse the transaction effect on accounts
-            _update_account_balances(transaction, reverse=True)
-            
             # Delete the transaction
             Transaction.delete_transaction(transaction_id)
-            return jsonify({'message': 'Transaction deleted'}), 200
+            
+            # Update account balances by reversing the transaction
+            _update_account_balances({
+                'type': transaction['type'],
+                'amount': float(transaction['amount']),
+                'account_from': transaction.get('account_from'),
+                'account_to': transaction.get('account_to'),
+                'date': transaction['date']
+            }, reverse=True)
+            
+            # Update budget if this was an expense
+            if transaction['type'] == 'expense':
+                budget = Budget.get_budget_by_category(
+                    current_user, 
+                    transaction['category'],
+                    date=transaction['date']
+                )
+                if budget:
+                    Budget.update_budget_with_transaction(
+                        str(budget['_id']),
+                        {
+                            'amount': float(transaction['amount']),
+                            'category': transaction['category'],
+                            'date': transaction['date'],
+                            'description': transaction['description'],
+                            '_id': str(transaction['_id'])
+                        },
+                        is_new=False  # This will remove the transaction from the budget
+                    )
+        
+            return jsonify({'message': 'Transaction deleted successfully'}), 200
     
     except Exception as e:
         return jsonify({'message': str(e)}), 400

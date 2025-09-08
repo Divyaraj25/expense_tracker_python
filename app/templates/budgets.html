@@ -1,25 +1,352 @@
-{% extends "base.html" %} {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2>Budgets</h2>
-  <button
-    class="btn btn-primary"
-    data-bs-toggle="modal"
-    data-bs-target="#addBudgetModal"
-  >
-    <i class="fas fa-plus me-1"></i> Add Budget
-  </button>
+{% extends "base.html" %} {% block styles %}
+<style>
+  /* Budget-specific styles */
+  .budget-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .budget-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  }
+
+  .budget-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eaeff4;
+    font-weight: 600;
+  }
+
+  .budget-progress {
+    height: 8px;
+    border-radius: 4px;
+    margin: 1rem 0;
+  }
+
+  .budget-meta {
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .budget-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eaeff4;
+  }
+
+  /* Filter section */
+  .filters {
+    background: white;
+    padding: 1.25rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Stats cards */
+  .stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0.5rem 0;
+  }
+
+  .stat-label {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="container-fluid py-4">
+  <!-- Page Header -->
+  <div class="page-header mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center">
+        <div>
+          <h1 class="mb-1">Budget Manager</h1>
+          <p class="mb-0">Track and manage your spending with ease</p>
+        </div>
+        <button 
+          class="btn btn-outline-info btn-sm ms-3" 
+          data-bs-toggle="modal" 
+          data-bs-target="#tipsModal"
+          title="View Budgeting Tips"
+        >
+          <i class="fas fa-lightbulb"></i> Tips
+        </button>
+      </div>
+      <button
+        class="btn btn-primary"
+        data-bs-toggle="modal"
+        data-bs-target="#budgetModal"
+        onclick="resetForm()"
+      >
+        <i class="fas fa-plus me-2"></i>Add Budget
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats Summary -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="stat-card">
+        <h6 class="stat-label">Total Budget</h6>
+        <div class="stat-value" id="totalBudget">₹0.00</div>
+        <div class="text-muted small">Across all categories</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card">
+        <h6 class="stat-label">Total Spent</h6>
+        <div class="stat-value text-primary" id="totalSpent">₹0.00</div>
+        <div class="text-muted small">This month</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card">
+        <h6 class="stat-label">Remaining</h6>
+        <div class="stat-value text-success" id="remainingBudget">₹0.00</div>
+        <div class="text-muted small">Available to spend</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label for="filterCategory" class="form-label">Category</label>
+        <select class="form-select" id="filterCategory">
+          <option value="">All Categories</option>
+          <!-- Categories will be populated by JavaScript -->
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label for="filterPeriod" class="form-label">Period</label>
+        <select class="form-select" id="filterPeriod">
+          <option value="">All Periods</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex align-items-end">
+        <button
+          class="btn btn-outline-secondary w-100"
+          onclick="resetFilters()"
+        >
+          <i class="fas fa-sync-alt me-2"></i>Reset Filters
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Budgets List -->
+  <div class="row" id="budgetsList">
+    <!-- Budget cards will be inserted here by JavaScript -->
+    <div class="col-12 text-center py-5" id="loadingState">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">Loading budgets...</p>
+    </div>
+  </div>
 </div>
 
-<div class="row" id="budgetsList">
-  <!-- Budgets will be loaded via JavaScript -->
-</div>
-
-<!-- Add Budget Modal -->
-<div class="modal fade" id="addBudgetModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+<!-- Budget Tips Modal -->
+<div class="modal fade" id="tipsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add Budget</h5>
+        <h5 class="modal-title">
+          <i class="fas fa-lightbulb text-warning me-2"></i>Budgeting Tips
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="tipsCarousel" class="carousel slide" data-bs-ride="carousel">
+          <div class="carousel-inner" id="tipsCarouselInner">
+            <!-- Tips will be loaded here by JavaScript -->
+          </div>
+          <button class="carousel-control-prev" type="button" data-bs-target="#tipsCarousel" data-bs-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Previous</span>
+          </button>
+          <button class="carousel-control-next" type="button" data-bs-target="#tipsCarousel" data-bs-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Next</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Budget Modal -->
+<div class="modal fade" id="budgetModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBudgetTitle">
+          <i class="fas fa-wallet me-2"></i>Add New Budget
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <form id="budgetForm" class="needs-validation" novalidate>
+        <div class="modal-body">
+          <!-- Category Selection -->
+          <div class="mb-3">
+            <label for="budgetCategory" class="form-label">
+              <i class="fas fa-tag me-1"></i>Category
+            </label>
+            <select class="form-select" id="budgetCategory" required>
+              <option value="" disabled selected>Select a category</option>
+              <!-- Categories will be populated by JavaScript -->
+            </select>
+            <div class="invalid-feedback">Please select a category</div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="budgetAmount" class="form-label">
+                <i class="fas fa-rupee-sign me-1"></i>Amount
+              </label>
+              <div class="input-group">
+                <span class="input-group-text">
+                  <i class="fas fa-rupee-sign"></i>
+                </span>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="budgetAmount"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  placeholder="0.00"
+                />
+              </div>
+              <div class="form-text">
+                Total budget amount for the selected period
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="budgetPeriod" class="form-label">
+                <i class="fas fa-calendar-alt me-1"></i>Period
+              </label>
+              <select class="form-select" id="budgetPeriod" required>
+                <option value="">Select period</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly" selected>Monthly</option>
+                <option value="yearly">Yearly</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="budgetStartDate" class="form-label">
+                <i class="fas fa-calendar-day me-1"></i>Start Date
+              </label>
+              <input
+                type="date"
+                class="form-control"
+                id="budgetStartDate"
+                required
+              />
+              <div class="form-text">When this budget period starts</div>
+            </div>
+
+            <div class="col-md-6" id="endDateContainer">
+              <label for="budgetEndDate" class="form-label">
+                <i class="fas fa-calendar-check me-1"></i>End Date
+              </label>
+              <input type="date" class="form-control" id="budgetEndDate" />
+              <div class="form-text">When this budget period ends</div>
+            </div>
+          </div>
+
+          <!-- Note Field -->
+          <div class="mb-3">
+            <label for="budgetNote" class="form-label">
+              <i class="fas fa-sticky-note me-1"></i>Notes (Optional)
+            </label>
+            <textarea 
+              class="form-control" 
+              id="budgetNote" 
+              rows="2" 
+              placeholder="Add any notes about this budget (e.g., specific goals, restrictions, etc.)"
+            ></textarea>
+          </div>
+
+          <!-- Tips Section -->
+          <div class="alert alert-info p-3 mb-0" id="budgetTips">
+            <div class="d-flex align-items-center mb-2">
+              <i class="fas fa-lightbulb me-2"></i>
+              <h6 class="mb-0">Budgeting Tip</h6>
+            </div>
+            <p class="mb-0" id="budgetTipText">Loading tips...</p>
+            <div class="d-flex justify-content-end mt-2">
+              <button type="button" class="btn btn-sm btn-outline-info" onclick="loadNewTip()">
+                <i class="fas fa-sync-alt me-1"></i>New Tip
+              </button>
+            </div>
+          </div>
+
+          <div class="form-text text-muted mt-2">
+            <i class="fas fa-info-circle me-1"></i>
+            The budget will automatically reset at the end of the period.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" id="saveBudgetBtn">
+            <i class="fas fa-save me-1"></i> Save Budget
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-danger me-2"></i>Confirm
+          Deletion
+        </h5>
         <button
           type="button"
           class="btn-close"
@@ -28,64 +355,67 @@
         ></button>
       </div>
       <div class="modal-body">
-        <form id="addBudgetForm">
-          <div class="mb-3">
-            <label class="form-label">Category</label>
-            <select class="form-select" id="budgetCategory" required>
-              <option value="">Select Category</option>
-              <!-- Categories will be populated via JavaScript -->
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Amount</label>
-            <input
-              type="number"
-              class="form-control"
-              id="budgetAmount"
-              step="0.01"
-              required
-            />
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Period</label>
-            <select class="form-select" id="budgetPeriod" required>
-              <option value="">Select Period</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Start Date</label>
-            <input
-              type="date"
-              class="form-control"
-              id="budgetStartDate"
-              required
-            />
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">End Date (Optional)</label>
-            <input type="date" class="form-control" id="budgetEndDate" />
-          </div>
-        </form>
+        <p>
+          Are you sure you want to delete this budget? This action cannot be
+          undone.
+        </p>
+        <p class="mb-0">
+          <strong>Category:</strong> <span id="deleteCategoryName"></span>
+        </p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
           Cancel
         </button>
-        <button type="button" class="btn btn-primary" id="saveBudget">
-          Save
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          <i class="fas fa-trash-alt me-1"></i> Delete Budget
         </button>
       </div>
     </div>
   </div>
 </div>
 {% endblock %} {% block scripts %}
+<script>
+  // Function to load a new budget tip
+  function loadNewTip() {
+    fetch('/api/budgets/tips')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('budgetTipText').textContent = data.tip;
+      })
+      .catch(error => {
+        console.error('Error loading tip:', error);
+      });
+  }
+
+  // Load a tip when the page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    loadNewTip();
+    
+    // Load all tips for the carousel
+    const tips = [
+      '💡 Set realistic budgets based on your past spending patterns',
+      '🍽️ Track food expenses daily to avoid overspending on dining out',
+      '🚗 Use public transport or carpool to save on transportation costs',
+      '💰 Save at least 20% of your income for future goals',
+      '📱 Use expense tracking apps to monitor your spending in real-time',
+      '🛒 Make a shopping list and stick to it to avoid impulse purchases',
+      '📊 Review your budget weekly to stay on track with your spending goals'
+    ];
+
+    const carouselInner = document.getElementById('tipsCarouselInner');
+    tips.forEach((tip, index) => {
+      const item = document.createElement('div');
+      item.className = `carousel-item ${index === 0 ? 'active' : ''}`;
+      item.innerHTML = `
+        <div class="text-center p-4">
+          <p class="lead">${tip}</p>
+          <small class="text-muted">Tip ${index + 1} of ${tips.length}</small>
+        </div>
+      `;
+      carouselInner.appendChild(item);
+    });
+  });
+</script>
 <script src="{{ url_for('static', filename='js/budgets.js') }}"></script>
 {% endblock %}
